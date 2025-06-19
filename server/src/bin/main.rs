@@ -1,6 +1,6 @@
 use std::{io::Read, net::TcpListener};
 
-use enigo::{Enigo, Key, Keyboard, Settings};
+use enigo::{Enigo, Key, Keyboard, Mouse, Settings};
 use shared::codes::{HidEvent, ScanCode};
 
 fn main() {

@@ -1,25 +1,34 @@
+use enigo::Button;
 use enigo::Direction;
 use enigo::Enigo;
 use enigo::Key;
 use enigo::Keyboard;
+use enigo::Mouse;
 use serde::{Deserialize, Serialize};
+use winit::event::MouseButton;
 use winit::{event::ElementState, keyboard::KeyCode};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HidEvent {
     Key(ScanCode),
-    Mouse(i32, i32),
+    MouseDelta(i32, i32),
+    MouseButton(MouseButtons),
+    MouseScroll(i32),
 }
 
 impl HidEvent {
     #[cfg(target_os = "windows")]
     pub fn process_code(&self, dev: &mut Enigo) {
-        use enigo::Mouse;
-
         match self {
             HidEvent::Key(scan_code) => dev.key(scan_code.to_enigo(), scan_code.dir).unwrap(),
-            HidEvent::Mouse(x, y) => {
+            HidEvent::MouseDelta(x, y) => {
                 dev.move_mouse(*x, *y, enigo::Coordinate::Rel).unwrap();
+            }
+            HidEvent::MouseButton(mouse_buttons) => {
+                dev.button(mouse_buttons.button, mouse_buttons.dir).unwrap();
+            }
+            HidEvent::MouseScroll(scroll) => {
+                dev.scroll(*scroll, enigo::Axis::Vertical).unwrap();
             }
         };
     }
@@ -180,6 +189,32 @@ impl ScanCode {
             KeyCode::Slash => Key::OEM2,
             KeyCode::ArrowLeft => Key::LeftArrow,
             _ => todo!(),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MouseButtons {
+    button: Button,
+    dir: Direction,
+}
+
+impl MouseButtons {
+    pub fn from_winit(button: MouseButton, dir: ElementState) -> Self {
+        let button = match button {
+            MouseButton::Left => Button::Left,
+            MouseButton::Right => Button::Right,
+            MouseButton::Middle => Button::Middle,
+            MouseButton::Back => Button::Back,
+            MouseButton::Forward => Button::Forward,
+            _ => Button::ScrollDown,
+        };
+        Self {
+            button,
+            dir: match dir {
+                ElementState::Pressed => Direction::Press,
+                ElementState::Released => Direction::Release,
+            },
         }
     }
 }

@@ -1,5 +1,5 @@
 use enigo::Key;
-use shared::codes::{HidEvent, ScanCode};
+use shared::codes::{HidEvent, MouseButtons, ScanCode};
 use softbuffer::{Context, Surface};
 use std::error::Error;
 use std::io::Write;
@@ -136,6 +136,25 @@ impl ApplicationHandler for App {
                     self.tx.send(scanCode).unwrap();
                 }
             }
+            WindowEvent::MouseInput {
+                device_id,
+                state,
+                button,
+            } => {
+                let code = HidEvent::MouseButton(MouseButtons::from_winit(button, state));
+                self.tx.send(code).unwrap();
+            }
+            WindowEvent::MouseWheel {
+                device_id,
+                delta,
+                phase,
+            } => {
+                let delta = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(_, i) => i as i32,
+                    winit::event::MouseScrollDelta::PixelDelta(physical_position) => 0,
+                };
+                self.tx.send(HidEvent::MouseScroll(delta)).unwrap();
+            }
             _ => {}
         }
     }
@@ -149,7 +168,7 @@ impl ApplicationHandler for App {
         match event {
             winit::event::DeviceEvent::MouseMotion { delta } => {
                 self.tx
-                    .send(HidEvent::Mouse(delta.0 as i32, delta.1 as i32))
+                    .send(HidEvent::MouseDelta(delta.0 as i32, delta.1 as i32))
                     .unwrap();
             }
             _ => {}
