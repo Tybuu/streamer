@@ -1,12 +1,15 @@
 [package]
-name = "window_server"
+name = "client"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-winit = {version = "*", features = ["serde"]}
+winit = {version = "*", features = ["serde"] }
 env_logger = "*"
 enigo = {version = "*", features = ["serde"] }
+# wgpu = "*" 
 log = "*"
+softbuffer = "0.4"
 serde = { version = "*", features = ["derive"] }
 bincode = "1.3"
+shared = {path = "../shared/" }

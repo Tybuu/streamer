@@ -1,6 +1,29 @@
-use enigo::{Direction, Key};
+use enigo::Direction;
+use enigo::Enigo;
+use enigo::Key;
+use enigo::Keyboard;
 use serde::{Deserialize, Serialize};
-use winit::keyboard::KeyCode;
+use winit::{event::ElementState, keyboard::KeyCode};
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum HidEvent {
+    Key(ScanCode),
+    Mouse(i32, i32),
+}
+
+impl HidEvent {
+    #[cfg(target_os = "windows")]
+    pub fn process_code(&self, dev: &mut Enigo) {
+        use enigo::Mouse;
+
+        match self {
+            HidEvent::Key(scan_code) => dev.key(scan_code.to_enigo(), scan_code.dir).unwrap(),
+            HidEvent::Mouse(x, y) => {
+                dev.move_mouse(*x, *y, enigo::Coordinate::Rel).unwrap();
+            }
+        };
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ScanCode {
@@ -9,6 +32,17 @@ pub struct ScanCode {
 }
 
 impl ScanCode {
+    pub fn new(code: KeyCode, dir: ElementState) -> Self {
+        Self {
+            code,
+            dir: match dir {
+                ElementState::Pressed => Direction::Press,
+                ElementState::Released => Direction::Release,
+            },
+        }
+    }
+
+    #[cfg(target_os = "windows")]
     pub fn to_enigo(&self) -> Key {
         match self.code {
             KeyCode::Digit0 => Key::Num0,

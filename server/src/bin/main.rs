@@ -1,7 +1,7 @@
 use std::{io::Read, net::TcpListener};
 
 use enigo::{Enigo, Key, Keyboard, Settings};
-use window_server::codes::ScanCode;
+use shared::codes::{HidEvent, ScanCode};
 
 fn main() {
     let addr = "192.168.10.3:8080";
@@ -18,10 +18,10 @@ fn main() {
                 let mut buffer = [0; 512];
                 match stream.read_exact(&mut buffer[..buf_size]) {
                     Ok(()) => {
-                        println!("Data: {:?}", buffer);
-                        let code = bincode::deserialize::<ScanCode>(&buffer[..buf_size]).unwrap();
-                        println!("Code: {:?}", code);
-                        dev.key(code.to_enigo(), code.dir).unwrap();
+                        println!("Data: {:?}", &buffer[..buf_size]);
+                        let event = bincode::deserialize::<HidEvent>(&buffer[..buf_size]).unwrap();
+                        println!("Code: {:?}", event);
+                        event.process_code(&mut dev);
                     }
                     Err(e) => panic!("{}", e),
                 }
