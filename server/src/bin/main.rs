@@ -21,7 +21,7 @@ fn main() {
                         println!("Data: {:?}", &buffer[..buf_size]);
                         let event = bincode::deserialize::<HidEvent>(&buffer[..buf_size]).unwrap();
                         println!("Code: {:?}", event);
-                        event.process_code(&mut dev);
+                        event.process_winput();
                     }
                     Err(e) => panic!("{}", e),
                 }

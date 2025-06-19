@@ -141,7 +141,7 @@ impl ApplicationHandler for App {
                 state,
                 button,
             } => {
-                let code = HidEvent::MouseButton(MouseButtons::from_winit(button, state));
+                let code = HidEvent::MouseButton(MouseButtons::new(button, state));
                 self.tx.send(code).unwrap();
             }
             WindowEvent::MouseWheel {
@@ -150,7 +150,7 @@ impl ApplicationHandler for App {
                 phase,
             } => {
                 let delta = match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, i) => i as i32,
+                    winit::event::MouseScrollDelta::LineDelta(_, i) => -i as i32,
                     winit::event::MouseScrollDelta::PixelDelta(physical_position) => 0,
                 };
                 self.tx.send(HidEvent::MouseScroll(delta)).unwrap();

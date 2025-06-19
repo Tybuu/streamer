@@ -7,6 +7,7 @@ edition = "2024"
 winit = {version = "*", features = ["serde"]}
 env_logger = "*"
 enigo = {version = "*", features = ["serde"] }
+winput = {version = "*"}
 log = "*"
 serde = { version = "*", features = ["derive"] }
 bincode = "1.3"
