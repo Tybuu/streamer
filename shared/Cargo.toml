@@ -9,4 +9,5 @@ env_logger = "*"
 enigo = {version = "*", features = ["serde"] }
 log = "*"
 serde = { version = "*", features = ["derive"] }
+winput = {version = "*" }
 bincode = "1.3"
