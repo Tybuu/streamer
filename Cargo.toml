@@ -1,0 +1,12 @@
+[package]
+name = "window_server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+winit = {version = "*", features = ["serde"]}
+env_logger = "*"
+enigo = {version = "*", features = ["serde"] }
+log = "*"
+serde = { version = "*", features = ["derive"] }
+bincode = "1.3"
