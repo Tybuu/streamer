@@ -1,12 +1,10 @@
 use std::{io::Read, net::TcpListener};
 
-use enigo::{Enigo, Key, Keyboard, Mouse, Settings};
-use shared::codes::{HidEvent, ScanCode};
+use shared::codes::HidEvent;
 
 fn main() {
     let addr = "192.168.10.3:8080";
     let listener = TcpListener::bind(addr).expect("Failed to bind to address");
-    let mut dev = Enigo::new(&Settings::default()).unwrap();
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => loop {

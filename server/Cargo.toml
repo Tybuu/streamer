@@ -5,10 +5,14 @@ edition = "2024"
 
 [dependencies]
 winit = {version = "*", features = ["serde"]}
+simplelog = "*"
 env_logger = "*"
-enigo = {version = "*", features = ["serde"] }
-winput = {version = "*"}
 log = "*"
 serde = { version = "*", features = ["derive"] }
 bincode = "1.3"
 shared = {path = "../shared/" }
+tokio = { version = "1", features = ["net", "macros"] }
+
+[target.'cfg(windows)'.dependencies]
+winput = {version = "*"}
+wasapi = "*"
