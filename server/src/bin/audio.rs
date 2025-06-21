@@ -2,7 +2,8 @@ use std::collections::VecDeque;
 use std::error;
 use std::io::Write;
 use std::net::TcpListener;
-use std::sync::mpsc;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Mutex, mpsc};
 use std::thread;
 use wasapi::*;
 
@@ -12,6 +13,8 @@ use simplelog::*;
 
 type Res<T> = Result<T, Box<dyn error::Error>>;
 
+const START: AtomicBool = AtomicBool::new(false);
+
 // Playback loop, play samples received from channel
 fn playback_loop(rx_play: std::sync::mpsc::Receiver<Vec<u8>>) -> Res<()> {
     let addr = "192.168.10.3:8080";
@@ -19,6 +22,7 @@ fn playback_loop(rx_play: std::sync::mpsc::Receiver<Vec<u8>>) -> Res<()> {
     loop {
         for stream in listener.incoming() {
             let mut stream = stream?;
+            START.store(true, std::sync::atomic::Ordering::Relaxed);
             loop {
                 let mut data = rx_play.recv().unwrap();
                 stream.write_all(data.as_mut_slice())?;
@@ -63,7 +67,9 @@ fn capture_loop(tx_capt: std::sync::mpsc::SyncSender<Vec<u8>>, chunksize: usize)
             for element in chunk.iter_mut() {
                 *element = sample_queue.pop_front().unwrap();
             }
-            tx_capt.send(chunk)?;
+            if START.load(std::sync::atomic::Ordering::Relaxed) {
+                tx_capt.send(chunk)?;
+            }
         }
         trace!("capturing");
         render_client.read_from_device_to_deque(&mut sample_queue)?;
