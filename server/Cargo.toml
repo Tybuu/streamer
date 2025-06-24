@@ -13,6 +13,7 @@ bincode = "1.3"
 shared = {path = "../shared/" }
 tokio = { version = "1", features = ["net", "macros"] }
 ringbuf = "*"
+bytemuck = "*"
 
 [target.'cfg(windows)'.dependencies]
 winput = {version = "*"}

@@ -1,3 +1,4 @@
+use bytemuck::checked::cast_slice;
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Observer, Producer, Split};
 use std::collections::VecDeque;
@@ -30,7 +31,7 @@ fn main() -> Res<()> {
 
     initialize_mta().ok()?;
 
-    let (mut tx, mut rx) = HeapRb::new((128 * 4) * 4).split();
+    let (mut tx, mut rx) = HeapRb::new((128 * 4) * 16).split();
     // Playback
     let _handle = thread::Builder::new()
         .name("Player".to_string())
@@ -44,7 +45,7 @@ fn main() -> Res<()> {
                     START.store(true, std::sync::atomic::Ordering::Relaxed);
                     loop {
                         let mut count = 0;
-                        while count != buf.len() {
+                        while count < buf.len() {
                             if !rx.is_empty() {
                                 count += rx.pop_slice(&mut buf[count..]);
                             }
@@ -84,15 +85,14 @@ fn main() -> Res<()> {
             let buffer_frame_count = audio_client.get_buffer_size().unwrap();
 
             let render_client = audio_client.get_audiocaptureclient().unwrap();
-            // let mut sample_queue: VecDeque<u8> = VecDeque::with_capacity(
-            //     100 * blockalign as usize * (1024 + 2 * buffer_frame_count as usize),
-            // );
-            let mut buf = [0u8; 128 * 4];
+            let mut buf = [0u8; 3600];
             audio_client.start_stream().unwrap();
             loop {
                 let read = render_client.read_from_device(&mut buf).unwrap();
                 if START.load(std::sync::atomic::Ordering::Relaxed) {
-                    tx.push_slice(&buf[..read.0 as usize]);
+                    tx.push_slice(&buf[..(read.0 * 8) as usize]);
+                    let f_slice: &[f32] = cast_slice(&buf[..(read.0 * 8) as usize]);
+                    trace!("Data: {:?}", f_slice);
                 }
                 if h_event.wait_for_event(1000000).is_err() {
                     error!("error, stopping capture");
