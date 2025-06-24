@@ -10,15 +10,23 @@ use ringbuf::{
 };
 
 fn main() {
-    let (mut producer, mut consumer) = HeapRb::<u8>::new(44100).split();
+    let (mut producer, mut consumer) = HeapRb::<f32>::new(44100).split();
     let socket_thread = std::thread::spawn(move || {
+        println!("Connecting to stream");
         let addr = "192.168.10.3:8080";
         let mut stream = TcpStream::connect(addr).expect("Unable to connect to stream");
         stream.set_nodelay(true).unwrap();
         let mut buf = [0u8; 2048];
+        let mut f32_buf = [0f32; 2048 / 4];
+        println!("Connected");
         loop {
             let data = stream.read(&mut buf).unwrap();
-            producer.push_slice(&buf[..data]);
+            let mut float = [0u8; 4];
+            for i in 0..(data / 4) {
+                float.copy_from_slice(&buf[i..(i + 4)]);
+                f32_buf[i] = f32::from_le_bytes(float);
+            }
+            producer.push_slice(&f32_buf[..(data / 4)]);
         }
     });
 
@@ -28,11 +36,11 @@ fn main() {
         .default_output_device()
         .expect("No default output device found");
 
-    println!("Using audio device: {}", device.name()?);
+    println!("Using audio device: {}", device.name().unwrap());
 
-    let supported_configs_range = device.supported_output_configs()?;
+    let supported_configs_range = device.supported_output_configs().unwrap();
     let supported_config = supported_configs_range
-        .filter(|c| c.sample_format() == cpal::SampleFormat::U8 && c.channels() == 2)
+        .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
         .next()
         .expect("No supported output config found")
         .with_sample_rate(cpal::SampleRate(44100)); // Or choose a specific rate like .with_sample_rate(cpal::SampleRate(44100))
@@ -50,21 +58,23 @@ fn main() {
     let sample_rate = output_config.sample_rate.0 as f32;
     let channels = output_config.channels as usize;
 
-    let data_callback = move |data: &mut [u8], _: &cpal::OutputCallbackInfo| {
-        for frame in data.chunks_mut(channels) {
-            let res = consumer.pop_slice(frame);
-            frame[res..frame.len()].fill(0);
-        }
+    let data_callback = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+        let res = consumer.pop_slice(data);
+        let len = data.len();
+        println!("{:?}", data);
+        data[res..len].fill(0.0);
     };
 
     let err_fn = |err| eprintln!("An error occurred on the audio stream: {}", err);
 
-    let stream = device.build_output_stream(
-        &config,
-        data_callback,
-        err_fn,
-        None, // None means no timeout for stream creation
-    )?;
+    let stream = device
+        .build_output_stream(
+            &config,
+            data_callback,
+            err_fn,
+            None, // None means no timeout for stream creation
+        )
+        .unwrap();
 
-    socket_thread.join();
+    socket_thread.join().unwrap();
 }

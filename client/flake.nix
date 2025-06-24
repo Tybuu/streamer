@@ -32,6 +32,10 @@
               libdecor # For window decorations (title bar, etc.)
               dbus # For system-wide message bus communication
               at-spi2-atk # For the accessibility toolkit, a common hidden dependency
+
+              libjack2
+              pipewire
+              alsa-lib
               (rust-bin.stable.latest.default.override
                 {
                   extensions = ["rust-src" "rust-analyzer" "llvm-tools"];

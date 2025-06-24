@@ -13,7 +13,7 @@ use simplelog::*;
 
 type Res<T> = Result<T, Box<dyn error::Error>>;
 
-const START: AtomicBool = AtomicBool::new(false);
+static START: AtomicBool = AtomicBool::new(false);
 
 // Playback loop, play samples received from channel
 fn playback_loop(rx_play: std::sync::mpsc::Receiver<Vec<u8>>) -> Res<()> {
@@ -68,6 +68,7 @@ fn capture_loop(tx_capt: std::sync::mpsc::SyncSender<Vec<u8>>, chunksize: usize)
                 *element = sample_queue.pop_front().unwrap();
             }
             if START.load(std::sync::atomic::Ordering::Relaxed) {
+                trace!("{:?}", chunk);
                 tx_capt.send(chunk)?;
             }
         }
