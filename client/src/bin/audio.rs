@@ -51,7 +51,7 @@ fn main() {
     let output_config: StreamConfig = supported_config.into();
 
     let config = StreamConfig {
-        buffer_size: BufferSize::Fixed(256 * 2), // Or a smaller number like 256 or 128
+        buffer_size: BufferSize::Fixed(128 * 2), // Or a smaller number like 256 or 128
         ..output_config
     };
 
