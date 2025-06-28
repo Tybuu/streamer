@@ -291,6 +291,7 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "bytemuck",
  "cpal",
  "enigo",
  "env_logger",

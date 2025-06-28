@@ -1,12 +1,13 @@
 use std::{io::Read, net::TcpStream, sync::mpsc};
 
+use bytemuck::cast_slice;
 use cpal::{
     BufferSize, StreamConfig,
     traits::{DeviceTrait, HostTrait},
 };
 use ringbuf::{
     HeapRb,
-    traits::{Consumer, Producer, Split},
+    traits::{Consumer, Observer, Producer, Split},
 };
 
 fn main() {
@@ -16,17 +17,12 @@ fn main() {
         let addr = "192.168.10.3:8080";
         let mut stream = TcpStream::connect(addr).expect("Unable to connect to stream");
         stream.set_nodelay(true).unwrap();
-        let mut buf = [0u8; 2048];
-        let mut f32_buf = [0f32; 2048 / 4];
+        let mut buf = [0u8; 128 * (2 * 8)];
         println!("Connected");
         loop {
-            let data = stream.read(&mut buf).unwrap();
-            let mut float = [0u8; 4];
-            for i in 0..(data / 4) {
-                float.copy_from_slice(&buf[i..(i + 4)]);
-                f32_buf[i] = f32::from_le_bytes(float);
-            }
-            producer.push_slice(&f32_buf[..(data / 4)]);
+            let data = stream.read_exact(&mut buf).unwrap();
+            let f_slice: &[f32] = cast_slice(&buf);
+            producer.push_slice(f_slice);
         }
     });
 
@@ -35,7 +31,6 @@ fn main() {
     let device = host
         .default_output_device()
         .expect("No default output device found");
-
     println!("Using audio device: {}", device.name().unwrap());
 
     let supported_configs_range = device.supported_output_configs().unwrap();
@@ -43,10 +38,9 @@ fn main() {
         .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
         .next()
         .expect("No supported output config found")
-        .with_sample_rate(cpal::SampleRate(44100)); // Or choose a specific rate like .with_sample_rate(cpal::SampleRate(44100))
+        .with_sample_rate(cpal::SampleRate(44100));
 
     println!("Supported config: {:?}", supported_config);
-
     let sample_format = supported_config.sample_format();
     let output_config: StreamConfig = supported_config.into();
 
@@ -59,10 +53,12 @@ fn main() {
     let channels = output_config.channels as usize;
 
     let data_callback = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-        let res = consumer.pop_slice(data);
-        let len = data.len();
-        println!("{:?}", data);
-        data[res..len].fill(0.0);
+        if consumer.occupied_len() >= data.len() {
+            consumer.pop_slice(data);
+            // println!("{:?}", data);
+        } else {
+            data.fill(0.0);
+        }
     };
 
     let err_fn = |err| eprintln!("An error occurred on the audio stream: {}", err);
