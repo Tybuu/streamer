@@ -4,6 +4,11 @@ use winit::{event::ElementState, keyboard::KeyCode};
 #[cfg(target_os = "windows")]
 use winput::Vk;
 
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn ShowCursor(bShow: i32) -> i32;
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HidEvent {
     Key(ScanCode),
@@ -26,6 +31,7 @@ impl HidEvent {
             }
 
             HidEvent::MouseDelta(x, y) => {
+                unsafe { while ShowCursor(1) < 0 {} }
                 winput::Mouse::move_relative(*x, *y);
             }
             HidEvent::MouseButton(mouse_buttons) => match mouse_buttons.dir {
