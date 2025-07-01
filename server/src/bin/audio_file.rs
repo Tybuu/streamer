@@ -1,104 +1,84 @@
-use bytemuck::checked::cast_slice;
-use ringbuf::HeapRb;
-use ringbuf::traits::{Consumer, Observer, Producer, Split};
-use std::collections::VecDeque;
-use std::error;
 use std::fs::File;
 use std::io::Write;
-use std::net::TcpListener;
-use std::process::exit;
-use std::sync::atomic::AtomicBool;
-use std::sync::{Mutex, mpsc};
 use std::thread;
-use wasapi::*;
+use std::time::Duration;
 
-#[macro_use]
-extern crate log;
-use simplelog::*;
+use bytemuck::cast_slice;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{BufferSize, SampleFormat, StreamConfig};
+use ringbuf::HeapRb;
+use ringbuf::traits::{Consumer, Producer, Split}; // For easy error handling
 
-type Res<T> = Result<T, Box<dyn error::Error>>;
+fn main() {
+    // 1. Get the default audio host
+    // A host provides access to the audio devices on the system.
+    let host = cpal::default_host();
 
-static START: AtomicBool = AtomicBool::new(false);
+    // 2. Get the default output device
+    // We'll typically use the system's default output device.
+    let device = host
+        .default_output_device()
+        .expect("No default output device found");
 
-// Main loop
-fn main() -> Res<()> {
-    let _ = SimpleLogger::init(
-        LevelFilter::Trace,
-        ConfigBuilder::new()
-            .set_time_format_rfc3339()
-            .set_time_offset_to_local()
-            .unwrap()
-            .build(),
-    );
+    println!("Using audio device: {}", device.name().unwrap());
 
-    initialize_mta().ok()?;
+    // 3. Get a supported output configuration
+    // Devices can support various sample rates, channel counts, and sample formats.
+    // We'll try to get the highest sample rate supported for simplicity.
 
-    let (mut tx, mut rx) = HeapRb::new((128 * 4) * 16).split();
-    // Playback
-    let _handle = thread::Builder::new()
-        .name("Player".to_string())
-        .spawn(move || {
-            let mut file = File::create("data.bin").unwrap();
-            let mut buf = [0u8; 44100 * 2 * 4];
-            START.store(true, std::sync::atomic::Ordering::Relaxed);
-            for _ in 0..10 {
-                let mut count = 0;
-                while count < buf.len() {
-                    if !rx.is_empty() {
-                        count += rx.pop_slice(&mut buf[count..]);
-                    }
-                }
-                file.write_all(&buf).unwrap();
-            }
-            exit(0);
-        });
+    let supported_configs_range = device.supported_output_configs().unwrap();
+    let supported_config = supported_configs_range
+        .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
+        .next()
+        .expect("No supported output config found")
+        .with_sample_rate(cpal::SampleRate(44100)); // Or choose a specific rate like .with_sample_rate(cpal::SampleRate(44100))
 
-    // Capture
-    let _handle = thread::Builder::new()
-        .name("Capture".to_string())
-        .spawn(move || {
-            let device = get_default_device(&Direction::Capture).unwrap();
-            let mut audio_client = device.get_iaudioclient().unwrap();
+    println!("Supported config: {:?}", supported_config);
 
-            let desired_format = WaveFormat::new(32, 32, &SampleType::Float, 44100, 2, None);
+    // 4. Convert the supported config into a usable `StreamConfig`
+    // We'll generally use f32 for floating-point audio processing,
+    // as it's common in DSP and provides good precision.
+    let sample_format = supported_config.sample_format();
+    let output_config: StreamConfig = supported_config.into();
 
-            let blockalign = desired_format.get_blockalign();
-            debug!("Desired capture format: {:?}", desired_format);
+    // For very low latency, you might try a fixed buffer size:
+    let config = StreamConfig {
+        buffer_size: BufferSize::Fixed(256 * 2), // Or a smaller number like 256 or 128
+        ..output_config
+    };
+    // Be aware that very small buffers can cause underruns (crackling) if your CPU can't keep up.
 
-            let (def_time, min_time) = audio_client.get_device_period().unwrap();
-            debug!("default period {}, min period {}", def_time, min_time);
+    // 5. Create a `Stream`
+    // This is where the magic happens: you provide a callback function that `cpal` will call
+    // whenever it needs more audio data.
+    let sample_rate = output_config.sample_rate.0 as f32;
+    let channels = output_config.channels as usize;
 
-            let mode = StreamMode::EventsShared {
-                autoconvert: true,
-                buffer_duration_hns: min_time,
-            };
-            audio_client
-                .initialize_client(&desired_format, &Direction::Capture, &mode)
-                .unwrap();
-            debug!("initialized capture");
+    println!("Config: {:?}", config);
 
-            let h_event = audio_client.set_get_eventhandle().unwrap();
+    let (mut producer, mut consumer) = HeapRb::<f32>::new(44100).split();
 
-            let buffer_frame_count = audio_client.get_buffer_size().unwrap();
+    let input_data = move |data: &[f32], _: &cpal::InputCallbackInfo| {
+        for frame in data.chunks(channels) {
+            producer.push_slice(frame);
+        }
+    };
 
-            let render_client = audio_client.get_audiocaptureclient().unwrap();
-            let capture_read_buf_size_bytes = buffer_frame_count as usize * blockalign as usize;
-            let mut buf = vec![0u8; capture_read_buf_size_bytes];
-            audio_client.start_stream().unwrap();
-            loop {
-                let read = render_client.read_from_device(&mut buf).unwrap();
-                if START.load(std::sync::atomic::Ordering::Relaxed) {
-                    tx.push_slice(&buf[..(read.0 * 8) as usize]);
-                    let f_slice: &[f32] = cast_slice(&buf[..(read.0 * 8) as usize]);
-                    trace!("Data: {:?}", f_slice);
-                }
-                if h_event.wait_for_event(1000000).is_err() {
-                    error!("error, stopping capture");
-                    audio_client.stop_stream().unwrap();
-                    break;
-                }
-            }
-        });
-    _handle.unwrap().join().unwrap();
-    Ok(())
+    // Define an error callback function
+    let err_fn = |err| eprintln!("An error occurred on the audio stream: {}", err);
+
+    let input_stream = device
+        .build_input_stream(&config, input_data, err_fn, None)
+        .unwrap();
+
+    let mut file = File::create("data.bin").unwrap();
+    // 6. Start the stream
+    input_stream.play().unwrap();
+    let mut buf = [0f32; 512];
+    loop {
+        let res = consumer.pop_slice(&mut buf);
+        if res != 0 {
+            file.write(cast_slice(&buf[..res])).unwrap();
+        }
+    }
 }
