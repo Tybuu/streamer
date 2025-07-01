@@ -38,18 +38,18 @@ fn main() -> Res<()> {
     let _handle = thread::Builder::new()
         .name("Player".to_string())
         .spawn(move || {
-            // let addr = "192.168.10.3:8080";
-            // let listener = TcpListener::bind(addr).expect("Failed to bind to address");
             let mut file = File::create("data.bin").unwrap();
-            let mut buf = [0u8; 128 * 4];
+            let mut buf = [0u8; 44100 * 2 * 4];
             START.store(true, std::sync::atomic::Ordering::Relaxed);
-            let mut count = 0;
-            while count < buf.len() {
-                if !rx.is_empty() {
-                    count += rx.pop_slice(&mut buf[count..]);
+            for _ in 0..10 {
+                let mut count = 0;
+                while count < buf.len() {
+                    if !rx.is_empty() {
+                        count += rx.pop_slice(&mut buf[count..]);
+                    }
                 }
+                file.write_all(&buf).unwrap();
             }
-            file.write_all(&buf).unwrap();
             exit(0);
         });
 
@@ -82,7 +82,8 @@ fn main() -> Res<()> {
             let buffer_frame_count = audio_client.get_buffer_size().unwrap();
 
             let render_client = audio_client.get_audiocaptureclient().unwrap();
-            let mut buf = [0u8; 3600];
+            let capture_read_buf_size_bytes = buffer_frame_count as usize * blockalign as usize;
+            let mut buf = vec![0u8; capture_read_buf_size_bytes];
             audio_client.start_stream().unwrap();
             loop {
                 let read = render_client.read_from_device(&mut buf).unwrap();
