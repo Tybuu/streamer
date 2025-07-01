@@ -17,7 +17,7 @@ fn main() {
         let addr = "192.168.10.3:8080";
         let mut stream = TcpStream::connect(addr).expect("Unable to connect to stream");
         stream.set_nodelay(true).unwrap();
-        let mut buf = [0u8; 128 * (2 * 8)];
+        let mut buf = [0u8; 128 * 2 * 4];
         println!("Connected");
         loop {
             let data = stream.read_exact(&mut buf).unwrap();
@@ -55,7 +55,6 @@ fn main() {
     let data_callback = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
         if consumer.occupied_len() >= data.len() {
             consumer.pop_slice(data);
-            // println!("{:?}", data);
         } else {
             data.fill(0.0);
         }

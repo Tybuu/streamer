@@ -1,106 +1,77 @@
-use bytemuck::checked::cast_slice;
-use ringbuf::HeapRb;
-use ringbuf::traits::{Consumer, Observer, Producer, Split};
-use std::collections::VecDeque;
-use std::error;
-use std::io::Write;
+use std::fs::File;
+use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::sync::atomic::AtomicBool;
-use std::sync::{Mutex, mpsc};
 use std::thread;
-use wasapi::*;
+use std::time::Duration;
 
-#[macro_use]
-extern crate log;
-use simplelog::*;
+use bytemuck::cast_slice;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{BufferSize, SampleFormat, StreamConfig};
+use ringbuf::HeapRb;
+use ringbuf::traits::{Consumer, Producer, Split}; // For easy error handling
 
-type Res<T> = Result<T, Box<dyn error::Error>>;
+fn main() {
+    let host = cpal::default_host();
 
-static START: AtomicBool = AtomicBool::new(false);
+    let device = host
+        .default_input_device()
+        .expect("No default output device found");
 
-// Main loop
-fn main() -> Res<()> {
-    let _ = SimpleLogger::init(
-        LevelFilter::Trace,
-        ConfigBuilder::new()
-            .set_time_format_rfc3339()
-            .set_time_offset_to_local()
-            .unwrap()
-            .build(),
-    );
+    println!("Using audio device: {}", device.name().unwrap());
 
-    initialize_mta().ok()?;
+    let supported_configs_range = device.supported_output_configs().unwrap();
+    let supported_config = supported_configs_range
+        .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
+        .next()
+        .expect("No supported output config found")
+        .with_sample_rate(cpal::SampleRate(48000)); // Or choose a specific rate like .with_sample_rate(cpal::SampleRate(44100))
 
-    let (mut tx, mut rx) = HeapRb::new((128 * 4) * 16).split();
-    // Playback
-    let _handle = thread::Builder::new()
-        .name("Player".to_string())
-        .spawn(move || {
-            let addr = "192.168.10.3:8080";
-            let listener = TcpListener::bind(addr).expect("Failed to bind to address");
-            loop {
-                for stream in listener.incoming() {
-                    let mut buf = [0u8; 128 * 4];
-                    let mut stream = stream.unwrap();
-                    START.store(true, std::sync::atomic::Ordering::Relaxed);
-                    loop {
-                        let mut count = 0;
-                        while count < buf.len() {
-                            if !rx.is_empty() {
-                                count += rx.pop_slice(&mut buf[count..]);
-                            }
-                        }
-                        stream.write_all(buf.as_mut_slice()).unwrap();
+    println!("Supported config: {:?}", supported_config);
+
+    let sample_format = supported_config.sample_format();
+    let output_config: StreamConfig = supported_config.into();
+
+    // For very low latency, you might try a fixed buffer size:
+    let config = StreamConfig {
+        buffer_size: BufferSize::Fixed(128 * 2), // Or a smaller number like 256 or 128
+        ..output_config
+    };
+
+    let sample_rate = output_config.sample_rate.0 as f32;
+    let channels = output_config.channels as usize;
+
+    println!("Config: {:?}", config);
+
+    let (mut producer, mut consumer) = HeapRb::<f32>::new(128 * 2 * 10).split();
+
+    let input_data = move |data: &[f32], _: &cpal::InputCallbackInfo| {
+        producer.push_slice(data);
+    };
+
+    // Define an error callback function
+    let err_fn = |err| eprintln!("An error occurred on the audio stream: {}", err);
+
+    let input_stream = device
+        .build_input_stream(&config, input_data, err_fn, None)
+        .unwrap();
+
+    let addr = "192.168.10.3:8080";
+    let listener = TcpListener::bind(addr).expect("Failed to bind to address");
+    for stream in listener.incoming() {
+        match stream {
+            Ok(mut stream) => {
+                println!("Connected");
+                input_stream.play().unwrap();
+                let mut buf = [0f32; 128 * 2];
+                loop {
+                    let mut count = 0;
+                    while count < buf.len() {
+                        count += consumer.pop_slice(&mut buf[count..]);
                     }
+                    stream.write_all(cast_slice(&buf)).unwrap();
                 }
             }
-        });
-
-    // Capture
-    let _handle = thread::Builder::new()
-        .name("Capture".to_string())
-        .spawn(move || {
-            let device = get_default_device(&Direction::Capture).unwrap();
-            let mut audio_client = device.get_iaudioclient().unwrap();
-
-            let desired_format = WaveFormat::new(32, 32, &SampleType::Float, 44100, 2, None);
-
-            let blockalign = desired_format.get_blockalign();
-            debug!("Desired capture format: {:?}", desired_format);
-
-            let (def_time, min_time) = audio_client.get_device_period().unwrap();
-            debug!("default period {}, min period {}", def_time, min_time);
-
-            let mode = StreamMode::EventsShared {
-                autoconvert: true,
-                buffer_duration_hns: min_time,
-            };
-            audio_client
-                .initialize_client(&desired_format, &Direction::Capture, &mode)
-                .unwrap();
-            debug!("initialized capture");
-
-            let h_event = audio_client.set_get_eventhandle().unwrap();
-
-            let buffer_frame_count = audio_client.get_buffer_size().unwrap();
-
-            let render_client = audio_client.get_audiocaptureclient().unwrap();
-            let mut buf = [0u8; 3600];
-            audio_client.start_stream().unwrap();
-            loop {
-                let read = render_client.read_from_device(&mut buf).unwrap();
-                if START.load(std::sync::atomic::Ordering::Relaxed) {
-                    tx.push_slice(&buf[..(read.0 * 8) as usize]);
-                    let f_slice: &[f32] = cast_slice(&buf[..(read.0 * 8) as usize]);
-                    trace!("Data: {:?}", f_slice);
-                }
-                if h_event.wait_for_event(1000000).is_err() {
-                    error!("error, stopping capture");
-                    audio_client.stop_stream().unwrap();
-                    break;
-                }
-            }
-        });
-    _handle.unwrap().join().unwrap();
-    Ok(())
+            Err(_) => todo!(),
+        }
+    }
 }
