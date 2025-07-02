@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use bytemuck::cast_slice;
 use cpal::{
     BufferSize, Stream, StreamConfig,
@@ -24,11 +25,11 @@ impl Inputs {
         Self { wifi_rx }
     }
 
-    pub async fn handle_loop(mut self) {
+    pub async fn handle_loop(mut self) -> Result<()> {
         let mut buf = vec![0u8; 32];
         loop {
-            let size = self.wifi_rx.read_u8().await.unwrap() as usize;
-            self.wifi_rx.read_exact(&mut buf[..size]).await.unwrap();
+            let size = self.wifi_rx.read_u8().await? as usize;
+            self.wifi_rx.read_exact(&mut buf[..size]).await?;
             let event = bincode::deserialize::<HidEvent>(&buf[..size]).unwrap();
             event.process_winput();
         }
@@ -42,16 +43,16 @@ pub struct Audio {
 }
 
 impl Audio {
-    pub fn new(wifi_tx: OwnedWriteHalf) -> Self {
+    pub fn new(wifi_tx: OwnedWriteHalf) -> Result<Self> {
         let host = cpal::default_host();
 
         let device = host
             .default_output_device()
             .expect("No default output device found");
 
-        println!("Using audio device: {}", device.name().unwrap());
+        println!("Using audio device: {}", device.name()?);
 
-        let supported_configs_range = device.supported_output_configs().unwrap();
+        let supported_configs_range = device.supported_output_configs()?;
         let supported_config = supported_configs_range
             .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
             .next()
@@ -71,7 +72,7 @@ impl Audio {
 
         println!("Config: {:?}", config);
 
-        let (mut producer, mut audio_rx) = HeapRb::<f32>::new(128 * 2 * 10).split();
+        let (mut producer, audio_rx) = HeapRb::<f32>::new(128 * 2 * 10).split();
 
         let input_data = move |data: &[f32], _: &cpal::InputCallbackInfo| {
             producer.push_slice(data);
@@ -80,25 +81,23 @@ impl Audio {
         // Define an error callback function
         let err_fn = |err| eprintln!("An error occurred on the audio stream: {}", err);
 
-        let input_stream = device
-            .build_input_stream(&config, input_data, err_fn, None)
-            .unwrap();
-        input_stream.play().unwrap();
-        Self {
+        let input_stream = device.build_input_stream(&config, input_data, err_fn, None)?;
+        input_stream.play()?;
+        Ok(Self {
             wifi_tx,
             audio_rx,
             stream: input_stream,
-        }
+        })
     }
 
-    pub async fn handle_loop(mut self) {
+    pub async fn handle_loop(mut self) -> Result<()> {
         let mut buf = [0f32; 128 * 2];
         loop {
             let mut count = 0;
             while count < buf.len() {
                 count += self.audio_rx.pop_slice(&mut buf[count..]);
             }
-            self.wifi_tx.write_all(cast_slice(&buf)).await.unwrap();
+            self.wifi_tx.write_all(cast_slice(&buf)).await?;
         }
     }
 }

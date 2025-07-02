@@ -36,12 +36,12 @@ impl Inputs {
             winit::event::ElementState::Pressed,
         )))
         .await;
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        self.send_data(&ChannelData::Key(ScanCode::new(
-            winit::keyboard::KeyCode::NumLock,
-            winit::event::ElementState::Released,
-        )))
-        .await;
+        // tokio::time::sleep(Duration::from_millis(10)).await;
+        // self.send_data(&ChannelData::Key(ScanCode::new(
+        //     winit::keyboard::KeyCode::NumLock,
+        //     winit::event::ElementState::Released,
+        // )))
+        // .await;
 
         loop {
             let key: ChannelData = self.data_rx.recv().await.unwrap();
