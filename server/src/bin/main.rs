@@ -23,9 +23,16 @@ async fn main() {
         let (rx, tx) = stream.into_split();
         let inputs = Inputs::new(rx);
         let audio = Audio::new(tx).unwrap();
+        let inputs_handle = tokio::spawn(inputs.handle_loop());
+        let audio_handle = tokio::spawn(audio.handle_loop());
+        let audio_handle_ab = audio_handle.abort_handle();
+        let inputs_handle_ab = inputs_handle.abort_handle();
         select! {
-            _ = inputs.handle_loop() => {},
-            _ = audio.handle_loop() => {}
+            _ = inputs_handle => {
+            },
+            _ = audio_handle => {}
         };
+        audio_handle_ab.abort();
+        inputs_handle_ab.abort();
     }
 }
