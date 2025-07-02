@@ -25,10 +25,11 @@ impl Inputs {
     }
 
     pub async fn handle_loop(mut self) {
-        let mut buf = [0u8; size_of::<HidEvent>()];
+        let mut buf = vec![0u8; 32];
         loop {
-            self.wifi_rx.read_exact(&mut buf).await.unwrap();
-            let event = bincode::deserialize::<HidEvent>(&buf).unwrap();
+            let size = self.wifi_rx.read_u8().await.unwrap() as usize;
+            self.wifi_rx.read_exact(&mut buf[..size]).await.unwrap();
+            let event = bincode::deserialize::<HidEvent>(&buf[..size]).unwrap();
             event.process_winput();
         }
     }

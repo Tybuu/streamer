@@ -190,6 +190,7 @@ impl ScanCode {
             KeyCode::Semicolon => Some(Vk::Oem1),
             KeyCode::Slash => Some(Vk::Oem2),
             KeyCode::ArrowLeft => Some(Vk::LeftArrow),
+            KeyCode::NumLock => Some(Vk::Numlock),
             _ => todo!(),
         }
     }

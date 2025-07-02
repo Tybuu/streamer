@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use bytemuck::cast_slice;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -6,7 +7,7 @@ use cpal::{BufferSize, Device, Stream, StreamConfig};
 use ringbuf::traits::{Consumer, Observer, Producer, Split};
 use ringbuf::wrap::caching::Caching;
 use ringbuf::{CachingProd, HeapRb, SharedRb};
-use shared::codes::HidEvent;
+use shared::codes::{HidEvent, ScanCode};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::{net::tcp::OwnedWriteHalf, sync::mpsc::Receiver};
@@ -23,11 +24,28 @@ impl Inputs {
         Self { wifi_tx, data_rx }
     }
 
+    async fn send_data(&mut self, data: &ChannelData) {
+        let mesg = bincode::serialize(&data).unwrap();
+        self.wifi_tx.write_u8(mesg.len() as u8).await.unwrap();
+        self.wifi_tx.write_all(&mesg).await.unwrap();
+    }
+
     pub async fn handle_loop(mut self) {
+        self.send_data(&ChannelData::Key(ScanCode::new(
+            winit::keyboard::KeyCode::NumLock,
+            winit::event::ElementState::Pressed,
+        )))
+        .await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        self.send_data(&ChannelData::Key(ScanCode::new(
+            winit::keyboard::KeyCode::NumLock,
+            winit::event::ElementState::Released,
+        )))
+        .await;
+
         loop {
             let key: ChannelData = self.data_rx.recv().await.unwrap();
-            let mesg = bincode::serialize(&key).unwrap();
-            self.wifi_tx.write_all(&mesg).await.unwrap();
+            self.send_data(&key).await;
         }
     }
 }
@@ -40,7 +58,7 @@ pub struct Audio {
 
 impl Audio {
     pub fn new(wifi_rx: OwnedReadHalf) -> Self {
-        let (mut audio_tx, mut consumer) = HeapRb::<f32>::new(44100).split();
+        let (audio_tx, mut consumer) = HeapRb::<f32>::new(44100).split();
 
         let host = cpal::default_host();
 

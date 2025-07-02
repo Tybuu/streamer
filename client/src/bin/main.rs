@@ -16,7 +16,9 @@ fn main() {
         let rt = Builder::new_multi_thread().enable_all().build().unwrap();
         rt.block_on(async {
             let addr = "192.168.10.3:8080";
-            let (wifi_rx, wifi_tx) = TcpStream::connect(addr).await.unwrap().into_split();
+            let stream = TcpStream::connect(addr).await.unwrap();
+            stream.set_nodelay(true).unwrap();
+            let (wifi_rx, wifi_tx) = stream.into_split();
 
             let inputs = Inputs::new(wifi_tx, rx);
             let audio = Audio::new(wifi_rx);
