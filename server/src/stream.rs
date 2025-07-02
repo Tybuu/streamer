@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bytemuck::cast_slice;
 use cpal::{
-    BufferSize, StreamConfig,
+    BufferSize, Stream, StreamConfig,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use ringbuf::{
@@ -37,6 +37,7 @@ impl Inputs {
 pub struct Audio {
     wifi_tx: OwnedWriteHalf,
     audio_rx: CachingCons<Arc<HeapRb<f32>>>,
+    stream: Stream,
 }
 
 impl Audio {
@@ -44,7 +45,7 @@ impl Audio {
         let host = cpal::default_host();
 
         let device = host
-            .default_input_device()
+            .default_output_device()
             .expect("No default output device found");
 
         println!("Using audio device: {}", device.name().unwrap());
@@ -82,7 +83,11 @@ impl Audio {
             .build_input_stream(&config, input_data, err_fn, None)
             .unwrap();
         input_stream.play().unwrap();
-        Self { wifi_tx, audio_rx }
+        Self {
+            wifi_tx,
+            audio_rx,
+            stream: input_stream,
+        }
     }
 
     pub async fn handle_loop(mut self) {

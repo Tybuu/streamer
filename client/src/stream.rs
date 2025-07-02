@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bytemuck::cast_slice;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{BufferSize, StreamConfig};
+use cpal::{BufferSize, Device, Stream, StreamConfig};
 use ringbuf::traits::{Consumer, Observer, Producer, Split};
 use ringbuf::wrap::caching::Caching;
 use ringbuf::{CachingProd, HeapRb, SharedRb};
@@ -35,6 +35,7 @@ impl Inputs {
 pub struct Audio {
     wifi_rx: OwnedReadHalf,
     audio_tx: CachingProd<Arc<HeapRb<f32>>>,
+    stream: Stream,
 }
 
 impl Audio {
@@ -82,7 +83,11 @@ impl Audio {
             )
             .unwrap();
         stream.play().unwrap();
-        Self { wifi_rx, audio_tx }
+        Self {
+            wifi_rx,
+            audio_tx,
+            stream,
+        }
     }
 
     pub async fn handle_loop(mut self) {
