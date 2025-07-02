@@ -8,6 +8,7 @@ winit = {version = "*", features = ["serde"] }
 env_logger = "*"
 enigo = {version = "*", features = ["serde"] }
 ringbuf = "*"
+tokio = { version = "*", features = ["rt-multi-thread", "net", "sync", "macros", "time", "io-util"] }
 # wgpu = "*" 
 log = "*"
 softbuffer = "0.4"

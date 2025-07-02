@@ -38,14 +38,14 @@ fn main() {
         .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
         .next()
         .expect("No supported output config found")
-        .with_sample_rate(cpal::SampleRate(44100));
+        .with_sample_rate(cpal::SampleRate(48000));
 
     println!("Supported config: {:?}", supported_config);
     let sample_format = supported_config.sample_format();
     let output_config: StreamConfig = supported_config.into();
 
     let config = StreamConfig {
-        buffer_size: BufferSize::Fixed(128 * 2), // Or a smaller number like 256 or 128
+        buffer_size: BufferSize::Fixed(256 * 2), // Or a smaller number like 256 or 128
         ..output_config
     };
 

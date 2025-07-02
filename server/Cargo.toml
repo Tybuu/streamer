@@ -11,7 +11,7 @@ log = "*"
 serde = { version = "*", features = ["derive"] }
 bincode = "1.3"
 shared = {path = "../shared/" }
-tokio = { version = "1", features = ["net", "macros"] }
+tokio = { version = "*", features = ["rt-multi-thread", "net", "sync", "macros", "time", "io-util"] }
 ringbuf = "*"
 bytemuck = "*"
 cpal = "*"
