@@ -100,8 +100,8 @@ impl ApplicationHandler for App {
                 is_synthetic,
             } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
-                    let scanCode = HidEvent::Key(ScanCode::new(code, event.state));
-                    self.tx.blocking_send(scanCode).unwrap();
+                    let scan_code = HidEvent::Key(ScanCode::new(code, event.state));
+                    self.tx.blocking_send(scan_code).unwrap();
                 }
             }
             WindowEvent::MouseInput {
