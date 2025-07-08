@@ -97,6 +97,7 @@ pub struct HidEmulator {
 impl HidEmulator {
     fn write_spawn(&self, dev: &HidDevice, buf: &[u8]) {
         if dev.write(buf).is_err() {
+            println!("Disconnected device");
             self.searching
                 .store(true, std::sync::atomic::Ordering::Release);
             Handle::current().spawn(get_device(
