@@ -25,28 +25,12 @@
           mkShell {
             buildInputs = [
               pkg-config
-              wayland
-              wayland-protocols
-              libxkbcommon
-              libGL
               libusb1
-              libdecor # For window decorations (title bar, etc.)
-              dbus # For system-wide message bus communication
-              at-spi2-atk # For the accessibility toolkit, a common hidden dependency
-
-              libjack2
-              pipewire
-              alsa-lib
               (rust-bin.stable.latest.default.override
                 {
                   extensions = ["rust-src" "rust-analyzer" "llvm-tools"];
+                  targets = ["x86_64-pc-windows-msvc"];
                 })
-            ];
-
-            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-              pkgs.wayland
-              pkgs.libxkbcommon
-              pkgs.libGL
             ];
           };
       }

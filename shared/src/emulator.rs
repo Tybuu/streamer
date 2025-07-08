@@ -1,4 +1,8 @@
-use std::{ops::Deref, sync::atomic::AtomicBool, time::Duration};
+use std::{
+    ops::Deref,
+    sync::{Arc, atomic::AtomicBool},
+    time::Duration,
+};
 
 use tokio::{runtime::Handle, sync::Mutex, time::sleep};
 use winit::event::ElementState;
@@ -53,58 +57,73 @@ enum HidType {
     MouseButtons = 2,
     MouseScroll = 3,
 }
+async fn get_device(
+    vid: u16,
+    pid: u16,
+    i_num: i32,
+    searching: Arc<AtomicBool>,
+    dev: Arc<Mutex<Option<HidDevice>>>,
+) {
+    let mut api = HidApi::new().unwrap();
+    loop {
+        api.refresh_devices().unwrap();
+        match api.device_list().find(|dev| {
+            dev.vendor_id() == vid && dev.product_id() == pid && dev.interface_number() == i_num
+        }) {
+            Some(new_dev) => {
+                if let Ok(open_dev) = new_dev.open_device(&api) {
+                    let mut dev = dev.lock().await;
+                    println!("connected to device");
+                    *dev = Some(open_dev);
+                    searching.store(false, std::sync::atomic::Ordering::Release);
+                    break;
+                } else {
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+            None => sleep(Duration::from_secs(1)).await,
+        }
+    }
+}
 
 pub struct HidEmulator {
-    dev: Mutex<Option<HidDevice>>,
-    searching: AtomicBool,
+    dev: Arc<Mutex<Option<HidDevice>>>,
+    searching: Arc<AtomicBool>,
     vid: u16,
     pid: u16,
     i_num: i32,
 }
 
 impl HidEmulator {
-    async fn get_device(&self) {
-        let api = HidApi::new().unwrap();
-        loop {
-            api.refresh_devices().unwrap();
-            match api.device_list().find(|dev| {
-                dev.vendor_id() == self.vid
-                    && dev.product_id() == self.pid
-                    && dev.interface_number() == self.i_num
-            }) {
-                Some(new_dev) => {
-                    if let Ok(open_dev) = new_dev.open_device(&api) {
-                        let mut dev = self.dev.lock().await;
-                        dev.insert(open_dev);
-                        self.searching
-                            .store(false, std::sync::atomic::Ordering::Release);
-                        break;
-                    } else {
-                        sleep(Duration::from_secs(1)).await;
-                    }
-                }
-                None => sleep(Duration::from_secs(1)).await,
-            }
-        }
-    }
-
     fn write_spawn(&self, dev: &HidDevice, buf: &[u8]) {
         if dev.write(buf).is_err() {
             self.searching
                 .store(true, std::sync::atomic::Ordering::Release);
-            Handle::current().spawn(self.get_device());
+            Handle::current().spawn(get_device(
+                self.vid,
+                self.pid,
+                self.i_num,
+                self.searching.clone(),
+                self.dev.clone(),
+            ));
         }
     }
 
     pub fn new(vid: u16, pid: u16, i_num: i32) -> Self {
         let emu = HidEmulator {
-            dev: Mutex::new(None),
-            searching: AtomicBool::new(true),
+            dev: Arc::new(Mutex::new(None)),
+            searching: Arc::new(AtomicBool::new(true)),
             vid,
             pid,
             i_num,
         };
-        Handle::current().spawn(emu.get_device());
+        Handle::current().spawn(get_device(
+            vid,
+            pid,
+            i_num,
+            emu.searching.clone(),
+            emu.dev.clone(),
+        ));
         emu
     }
 }
@@ -120,7 +139,6 @@ impl Emulator for HidEmulator {
             Err(_) => return,
         };
         if let Some(dev) = dev.as_ref() {
-            let mut error = false;
             match hid_event {
                 HidEvent::Key(scan_code) => {
                     if let Some(code) = scan_code.to_hid() {
