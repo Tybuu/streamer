@@ -29,6 +29,7 @@
               wayland-protocols
               libxkbcommon
               libGL
+              libusb1
               libdecor # For window decorations (title bar, etc.)
               dbus # For system-wide message bus communication
               at-spi2-atk # For the accessibility toolkit, a common hidden dependency

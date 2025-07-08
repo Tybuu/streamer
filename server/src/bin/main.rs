@@ -1,6 +1,6 @@
 use anyhow::{Ok, Result, anyhow};
 use server::stream::{Audio, Inputs};
-use shared::codes::HidEvent;
+use shared::{codes::HidEvent, emulator::WinputEmulator};
 use tokio::{join, net::TcpListener, select};
 
 #[tokio::main]
@@ -21,7 +21,8 @@ async fn main() {
         };
         stream.set_nodelay(true).unwrap();
         let (rx, tx) = stream.into_split();
-        let inputs = Inputs::new(rx);
+        let emulator = WinputEmulator::new();
+        let inputs = Inputs::new(rx, emulator);
         let audio = Audio::new(tx).unwrap();
         let inputs_handle = tokio::spawn(inputs.handle_loop());
         let audio_handle = tokio::spawn(audio.handle_loop());

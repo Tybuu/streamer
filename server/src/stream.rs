@@ -10,19 +10,23 @@ use ringbuf::{
     CachingCons, HeapRb,
     traits::{Consumer, Producer, Split},
 };
-use shared::codes::HidEvent;
+use shared::{
+    codes::HidEvent,
+    emulator::{Emulator, WinputEmulator},
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
 
-pub struct Inputs {
+pub struct Inputs<E: Emulator> {
     wifi_rx: OwnedReadHalf,
+    emulator: E,
 }
 
-impl Inputs {
-    pub fn new(wifi_rx: OwnedReadHalf) -> Self {
-        Self { wifi_rx }
+impl<E: Emulator> Inputs<E> {
+    pub fn new(wifi_rx: OwnedReadHalf, emulator: E) -> Self {
+        Self { wifi_rx, emulator }
     }
 
     pub async fn handle_loop(mut self) -> Result<()> {
@@ -31,7 +35,7 @@ impl Inputs {
             let size = self.wifi_rx.read_u8().await? as usize;
             self.wifi_rx.read_exact(&mut buf[..size]).await?;
             let event = bincode::deserialize::<HidEvent>(&buf[..size]).unwrap();
-            event.process_winput();
+            self.emulator.emulate_input(&event);
         }
     }
 }
