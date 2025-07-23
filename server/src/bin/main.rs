@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{Ok, Result, anyhow};
 use server::stream::{Audio, Inputs};
 use shared::{
@@ -9,6 +11,7 @@ use tokio::{join, net::TcpListener, select};
 #[tokio::main]
 async fn main() {
     let addr = "192.168.10.3:8080";
+    let emulator = Arc::new(HidEmulator::new(0xa56, 0xa56, 1));
     loop {
         let listener = TcpListener::bind(addr).await;
         let listener = if listener.is_ok() {
@@ -24,8 +27,7 @@ async fn main() {
         };
         stream.set_nodelay(true).unwrap();
         let (rx, tx) = stream.into_split();
-        let emulator = HidEmulator::new(0xa56, 0xa56, 1);
-        let inputs = Inputs::new(rx, emulator);
+        let inputs = Inputs::new(rx, emulator.clone());
         let audio = Audio::new(tx).unwrap();
         let inputs_handle = tokio::spawn(inputs.handle_loop());
         let audio_handle = tokio::spawn(audio.handle_loop());

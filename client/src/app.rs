@@ -39,6 +39,7 @@ impl ApplicationHandler for App {
             window
                 .set_cursor_grab(winit::window::CursorGrabMode::Locked)
                 .unwrap();
+            window.set_cursor_visible(false);
             self.window = Some(window.clone());
 
             let context = Context::new(window.clone()).unwrap();

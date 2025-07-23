@@ -21,11 +21,11 @@ use tokio::{
 
 pub struct Inputs<E: Emulator> {
     wifi_rx: OwnedReadHalf,
-    emulator: E,
+    emulator: Arc<E>,
 }
 
 impl<E: Emulator> Inputs<E> {
-    pub fn new(wifi_rx: OwnedReadHalf, emulator: E) -> Self {
+    pub fn new(wifi_rx: OwnedReadHalf, emulator: Arc<E>) -> Self {
         Self { wifi_rx, emulator }
     }
 

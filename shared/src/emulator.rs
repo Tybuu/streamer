@@ -66,6 +66,12 @@ async fn get_device(
 ) {
     let mut api = HidApi::new().unwrap();
     loop {
+        // Stop this task if the HidEmulator that spawned this task is dropped.
+        // A count of 1 signals that the HidEmulator is dropped as searching is only
+        // cloned once when spawning this task
+        if Arc::strong_count(&searching) == 1 {
+            break;
+        }
         api.refresh_devices().unwrap();
         match api.device_list().find(|dev| {
             dev.vendor_id() == vid && dev.product_id() == pid && dev.interface_number() == i_num
