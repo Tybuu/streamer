@@ -131,7 +131,10 @@ impl DisplayControl {
     pub fn new(display_name: &str, rx: Receiver<()>) -> Self {
         let display = Display::enumerate()
             .into_iter()
-            .find(|x| x.info.model_name.as_ref().unwrap() == display_name)
+            .find(|x| match x.info.model_name.as_ref() {
+                Some(val) => val == display_name,
+                None => false,
+            })
             .unwrap();
         Self { display, rx }
     }
