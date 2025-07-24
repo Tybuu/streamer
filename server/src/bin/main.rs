@@ -30,10 +30,12 @@ async fn main() {
         let (display_tx, display_rx) = mpsc::channel::<()>(10);
         let inputs = Inputs::new(wifi_rx, emulator.clone(), display_tx);
         let audio = Audio::new(wifi_tx).unwrap();
-        let display_control = DisplayControl::new("G274QPF E2", display_rx);
         let inputs_handle = tokio::spawn(inputs.handle_loop());
         let audio_handle = tokio::spawn(audio.handle_loop());
-        let display_handle = tokio::task::spawn_local(display_control.handle_loop());
+        let display_handle = tokio::task::spawn_blocking(move || {
+            let display_control = DisplayControl::new("G274QPF E2", display_rx);
+            display_control.handle_loop();
+        });
         let audio_handle_ab = audio_handle.abort_handle();
         let inputs_handle_ab = inputs_handle.abort_handle();
         let display_handle_ab = display_handle.abort_handle();

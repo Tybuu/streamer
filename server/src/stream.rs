@@ -139,9 +139,9 @@ impl DisplayControl {
         Self { display, rx }
     }
 
-    pub async fn handle_loop(mut self) {
+    pub fn handle_loop(mut self) {
         loop {
-            if self.rx.recv().await.is_none() {
+            if self.rx.blocking_recv().is_none() {
                 break;
             }
             self.display.handle.set_vcp_feature(0x60, 0x10);
