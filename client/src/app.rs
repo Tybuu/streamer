@@ -8,18 +8,17 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
-type ChannelData = HidEvent;
 pub struct App {
     // The window is optional because it is not created until the
     // `resumed` event is received.
     window: Option<std::rc::Rc<Window>>,
     context: Option<Context<std::rc::Rc<Window>>>,
     surface: Option<Surface<std::rc::Rc<Window>, std::rc::Rc<Window>>>,
-    tx: Sender<ChannelData>,
+    tx: Sender<HidEvent>,
 }
 
 impl App {
-    pub fn new(tx: Sender<ChannelData>) -> Self {
+    pub fn new(tx: Sender<HidEvent>) -> Self {
         Self {
             window: None,
             context: None,

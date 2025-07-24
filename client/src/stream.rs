@@ -7,45 +7,28 @@ use cpal::{BufferSize, Device, Stream, StreamConfig};
 use ringbuf::traits::{Consumer, Observer, Producer, Split};
 use ringbuf::wrap::caching::Caching;
 use ringbuf::{CachingProd, HeapRb, SharedRb};
-use shared::codes::{HidEvent, ScanCode};
+use serde::Serialize;
+use shared::codes::{ChannelData, HidEvent, ScanCode};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::OwnedReadHalf;
+use tokio::sync::mpsc::Sender;
 use tokio::{net::tcp::OwnedWriteHalf, sync::mpsc::Receiver};
 
-type ChannelData = HidEvent;
-
 pub struct Inputs {
-    wifi_tx: OwnedWriteHalf,
-    data_rx: Receiver<ChannelData>,
+    shared_tx: Sender<Vec<u8>>,
+    data_rx: Receiver<HidEvent>,
 }
 
 impl Inputs {
-    pub fn new(wifi_tx: OwnedWriteHalf, data_rx: Receiver<ChannelData>) -> Self {
-        Self { wifi_tx, data_rx }
-    }
-
-    async fn send_data(&mut self, data: &ChannelData) {
-        let mesg = bincode::serialize(&data).unwrap();
-        self.wifi_tx.write_u8(mesg.len() as u8).await.unwrap();
-        self.wifi_tx.write_all(&mesg).await.unwrap();
+    pub fn new(shared_tx: Sender<Vec<u8>>, data_rx: Receiver<HidEvent>) -> Self {
+        Self { shared_tx, data_rx }
     }
 
     pub async fn handle_loop(mut self) {
-        self.send_data(&ChannelData::Key(ScanCode::new(
-            winit::keyboard::KeyCode::NumLock,
-            winit::event::ElementState::Pressed,
-        )))
-        .await;
-        // tokio::time::sleep(Duration::from_millis(10)).await;
-        // self.send_data(&ChannelData::Key(ScanCode::new(
-        //     winit::keyboard::KeyCode::NumLock,
-        //     winit::event::ElementState::Released,
-        // )))
-        // .await;
-
         loop {
-            let key: ChannelData = self.data_rx.recv().await.unwrap();
-            self.send_data(&key).await;
+            let key: HidEvent = self.data_rx.recv().await.unwrap();
+            let mesg = bincode::serialize(&key).unwrap();
+            self.shared_tx.send(mesg).await.unwrap();
         }
     }
 }
@@ -114,6 +97,30 @@ impl Audio {
             self.wifi_rx.read_exact(&mut buf).await.unwrap();
             let f_slice: &[f32] = cast_slice(&buf);
             self.audio_tx.push_slice(f_slice);
+        }
+    }
+}
+
+pub struct SharedSender {
+    writer: OwnedWriteHalf,
+    rx: Receiver<Vec<u8>>,
+}
+impl SharedSender {
+    pub fn new(writer: OwnedWriteHalf, rx: Receiver<Vec<u8>>) -> Self {
+        Self { writer, rx }
+    }
+
+    pub async fn write_loop(mut self) {
+        loop {
+            match self.rx.recv().await {
+                Some(buf) => {
+                    self.writer.write_u8(buf.len() as u8).await.unwrap();
+                    self.writer.write_all(&buf).await.unwrap();
+                }
+                None => {
+                    break;
+                }
+            }
         }
     }
 }

@@ -6,27 +6,37 @@ use cpal::{
     BufferSize, Stream, StreamConfig,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
+use ddc_hi::{Ddc, Display};
 use ringbuf::{
     CachingCons, HeapRb,
     traits::{Consumer, Producer, Split},
 };
 use shared::{
-    codes::HidEvent,
+    codes::{ChannelData, HidEvent},
     emulator::{Emulator, WinputEmulator},
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    sync::{
+        Mutex,
+        mpsc::{Receiver, Sender},
+    },
 };
 
 pub struct Inputs<E: Emulator> {
     wifi_rx: OwnedReadHalf,
     emulator: Arc<E>,
+    display_tx: Sender<()>,
 }
 
 impl<E: Emulator> Inputs<E> {
-    pub fn new(wifi_rx: OwnedReadHalf, emulator: Arc<E>) -> Self {
-        Self { wifi_rx, emulator }
+    pub fn new(wifi_rx: OwnedReadHalf, emulator: Arc<E>, display_tx: Sender<()>) -> Self {
+        Self {
+            wifi_rx,
+            emulator,
+            display_tx,
+        }
     }
 
     pub async fn handle_loop(mut self) -> Result<()> {
@@ -34,8 +44,15 @@ impl<E: Emulator> Inputs<E> {
         loop {
             let size = self.wifi_rx.read_u8().await? as usize;
             self.wifi_rx.read_exact(&mut buf[..size]).await?;
-            let event = bincode::deserialize::<HidEvent>(&buf[..size]).unwrap();
-            self.emulator.emulate_input(&event);
+            let event = bincode::deserialize::<ChannelData>(&buf[..size])?;
+            match event {
+                ChannelData::Hid(hid_event) => {
+                    self.emulator.emulate_input(&hid_event);
+                }
+                ChannelData::ChangeDisplay => {
+                    self.display_tx.send(()).await?;
+                }
+            }
         }
     }
 }
@@ -102,6 +119,29 @@ impl Audio {
                 count += self.audio_rx.pop_slice(&mut buf[count..]);
             }
             self.wifi_tx.write_all(cast_slice(&buf)).await?;
+        }
+    }
+}
+pub struct DisplayControl {
+    display: Display,
+    rx: Receiver<()>,
+}
+
+impl DisplayControl {
+    pub fn new(display_name: &str, rx: Receiver<()>) -> Self {
+        let display = Display::enumerate()
+            .into_iter()
+            .find(|x| x.info.model_name.as_ref().unwrap() == display_name)
+            .unwrap();
+        Self { display, rx }
+    }
+
+    pub async fn handle_loop(mut self) {
+        loop {
+            if self.rx.recv().await.is_none() {
+                break;
+            }
+            self.display.handle.set_vcp_feature(0x60, 0x10);
         }
     }
 }

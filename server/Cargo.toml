@@ -13,6 +13,7 @@ serde = { version = "*", features = ["derive"] }
 bincode = "1.3"
 shared = {path = "../shared/" }
 tokio = { version = "*", features = ["rt-multi-thread", "net", "sync", "macros", "time", "io-util"] }
+ddc-hi = "*"
 ringbuf = "*"
 bytemuck = "*"
 cpal = "*"

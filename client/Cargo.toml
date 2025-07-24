@@ -16,4 +16,5 @@ serde = { version = "*", features = ["derive"] }
 bincode = "1.3"
 cpal = {version = "*", features = ["jack"]}
 bytemuck = "*"
+ddc-hi = "*"
 shared = {path = "../shared/" }

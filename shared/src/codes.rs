@@ -6,6 +6,12 @@ use winput::Vk;
 
 use crate::scan_codes::HidCodes;
 
+#[derive(Serialize, Deserialize)]
+pub enum ChannelData {
+    Hid(HidEvent),
+    ChangeDisplay,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HidEvent {
     Key(ScanCode),
