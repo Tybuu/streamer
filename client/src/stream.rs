@@ -27,7 +27,7 @@ impl Inputs {
     pub async fn handle_loop(mut self) {
         loop {
             let key: HidEvent = self.data_rx.recv().await.unwrap();
-            let mesg = bincode::serialize(&key).unwrap();
+            let mesg = bincode::serialize(&ChannelData::Hid(key)).unwrap();
             self.shared_tx.send(mesg).await.unwrap();
         }
     }
