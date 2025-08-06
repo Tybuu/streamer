@@ -32,11 +32,21 @@ impl DisplayControl {
     }
 
     pub async fn handle_loop(mut self) {
+        const DISPLAY_OUTPUT_CODE: u8 = 0x60;
+        const HDMI2: u16 = 0x12;
         loop {
+            // Any external program can signal to switch displays by writing to the unix datagram
+            // The internal data doesn't matter
             self.sock.recv(&mut [0u8]).await.unwrap();
-            match self.display.handle.get_vcp_feature(0x60) {
+
+            // Getting any vcp feature when the corresponding output of the monitor isn't
+            // on this computer returns an error so we can use this fact to determine which
+            // computer needs to write to the monitor to switch
+            match self.display.handle.get_vcp_feature(DISPLAY_OUTPUT_CODE) {
                 Ok(_) => {
-                    self.display.handle.set_vcp_feature(0x60, 0x12);
+                    self.display
+                        .handle
+                        .set_vcp_feature(DISPLAY_OUTPUT_CODE, HDMI2);
                 }
                 Err(_) => {
                     let buf = bincode::serialize(&ChannelData::ChangeDisplay).unwrap();
