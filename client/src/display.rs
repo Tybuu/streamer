@@ -18,10 +18,18 @@ impl DisplayControl {
     ) -> Self {
         fs::remove_file(bind_path.as_ref());
         let sock = UnixDatagram::bind(bind_path).unwrap();
-
         let display = Display::enumerate()
             .into_iter()
-            .find(|x| x.info.model_name.as_ref().unwrap() == display_name)
+            .find(|x| match x.info.model_name.as_ref() {
+                Some(name) => {
+                    if name == display_name {
+                        true
+                    } else {
+                        false
+                    }
+                }
+                None => false,
+            })
             .unwrap();
 
         Self {
@@ -34,6 +42,7 @@ impl DisplayControl {
     pub async fn handle_loop(mut self) {
         const DISPLAY_OUTPUT_CODE: u8 = 0x60;
         const HDMI2: u16 = 0x12;
+        const DP: u16 = 0x0F;
         loop {
             // Any external program can signal to switch displays by writing to the unix datagram
             // The internal data doesn't matter
@@ -44,9 +53,7 @@ impl DisplayControl {
             // computer needs to write to the monitor to switch
             match self.display.handle.get_vcp_feature(DISPLAY_OUTPUT_CODE) {
                 Ok(_) => {
-                    self.display
-                        .handle
-                        .set_vcp_feature(DISPLAY_OUTPUT_CODE, HDMI2);
+                    self.display.handle.set_vcp_feature(DISPLAY_OUTPUT_CODE, DP);
                 }
                 Err(_) => {
                     let buf = bincode::serialize(&ChannelData::ChangeDisplay).unwrap();
