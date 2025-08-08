@@ -20,7 +20,7 @@ use tokio::{
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     sync::{
         Mutex,
-        mpsc::{Receiver, Sender},
+        mpsc::{self, Receiver, Sender},
     },
 };
 
@@ -59,7 +59,7 @@ impl<E: Emulator> Inputs<E> {
 
 pub struct Audio {
     wifi_tx: OwnedWriteHalf,
-    audio_rx: CachingCons<Arc<HeapRb<f32>>>,
+    audio_rx: Receiver<Vec<f32>>,
     stream: Stream,
 }
 
@@ -93,10 +93,10 @@ impl Audio {
 
         println!("Config: {:?}", config);
 
-        let (mut producer, audio_rx) = HeapRb::<f32>::new(128 * 2 * 10).split();
+        let (mut producer, audio_rx) = mpsc::channel::<Vec<f32>>(20);
 
         let input_data = move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            producer.push_slice(data);
+            producer.try_send(Vec::from(data));
         };
 
         // Define an error callback function
@@ -112,12 +112,12 @@ impl Audio {
     }
 
     pub async fn handle_loop(mut self) -> Result<()> {
-        let mut buf = [0f32; 128 * 2];
         loop {
-            let mut count = 0;
-            while count < buf.len() {
-                count += self.audio_rx.pop_slice(&mut buf[count..]);
-            }
+            let buf = self
+                .audio_rx
+                .recv()
+                .await
+                .ok_or(anyhow::Error::msg("channel closed"))?;
             self.wifi_tx.write_all(cast_slice(&buf)).await?;
         }
     }
@@ -127,6 +127,8 @@ pub struct DisplayControl {
     rx: Receiver<()>,
 }
 
+const DP: u16 = 0x0F;
+const DISPLAY_OUTPUT_CODE: u8 = 0x60;
 impl DisplayControl {
     pub fn new(display_name: &str, rx: Receiver<()>) -> Self {
         let display = Display::enumerate()
@@ -144,7 +146,7 @@ impl DisplayControl {
             if self.rx.blocking_recv().is_none() {
                 break;
             }
-            self.display.handle.set_vcp_feature(0x60, 0x12);
+            self.display.handle.set_vcp_feature(DISPLAY_OUTPUT_CODE, DP);
         }
     }
 }

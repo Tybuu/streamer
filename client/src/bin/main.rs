@@ -8,7 +8,6 @@ use tokio::net::TcpStream;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc::{self, channel};
 use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::{Window, WindowId};
 
 fn main() {
     let (hid_tx, hid_rx) = channel(128);
