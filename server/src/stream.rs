@@ -144,7 +144,7 @@ impl DisplayControl {
             if self.rx.blocking_recv().is_none() {
                 break;
             }
-            self.display.handle.set_vcp_feature(0x60, 0x0F);
+            self.display.handle.set_vcp_feature(0x60, 0x12);
         }
     }
 }
