@@ -13,7 +13,7 @@ tokio = { version = "*", features = ["rt-multi-thread", "net", "sync", "macros",
 log = "*"
 softbuffer = "0.4"
 serde = { version = "*", features = ["derive"] }
-bincode = "1.3"
+bincode = "1.3.3"
 cpal = {version = "*", features = ["jack"]}
 bytemuck = "*"
 ddc-hi = "*"

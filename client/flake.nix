@@ -30,13 +30,15 @@
               libxkbcommon
               libGL
               libusb1
-              libdecor # For window decorations (title bar, etc.)
-              dbus # For system-wide message bus communication
-              at-spi2-atk # For the accessibility toolkit, a common hidden dependency
+              libdecor
+              dbus
+              at-spi2-atk
 
-              libjack2
               pipewire
+              pipewire.jack
               alsa-lib
+              alsa-plugins
+              rtkit
               (rust-bin.stable.latest.default.override
                 {
                   extensions = ["rust-src" "rust-analyzer" "llvm-tools"];
@@ -47,7 +49,12 @@
               pkgs.wayland
               pkgs.libxkbcommon
               pkgs.libGL
+              pkgs.pipewire
+              pkgs.pipewire.jack
+              pkgs.alsa-lib
+              pkgs.alsa-plugins
             ];
+            ALSA_PLUGIN_DIR = "${pkgs.alsa-plugins}/lib/alsa-lib";
           };
       }
     );

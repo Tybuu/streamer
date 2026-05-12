@@ -1,7 +1,6 @@
 use client::app::App;
 use client::display::DisplayControl;
 use client::stream::{Audio, Inputs, SharedSender};
-use shared::codes::HidEvent;
 use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
 use std::str::FromStr;
 use std::thread;
@@ -19,7 +18,7 @@ fn main() {
     thread::spawn(move || {
         let rt = Builder::new_multi_thread().enable_all().build().unwrap();
         rt.block_on(async {
-            let addr = "192.168.10.3:8080";
+            let addr = "192.168.68.66:8080";
             let stream;
             loop {
                 let new_stream = TcpStream::connect(addr).await;
